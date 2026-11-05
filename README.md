@@ -59,6 +59,19 @@ The app uses port 8080, so stop any other app on that port first.
 Then open http://localhost:8080, click **Ingest docs/ folder** (a sample Spring Boot notes
 file is included), and ask: *"How should I configure JWT in Spring Security?"*
 
+## Tests
+
+```powershell
+.\mvnw.cmd verify
+```
+
+`RagApiIT` runs the whole RAG flow against real services started by Testcontainers (Docker must be running):
+
+- **pgvector/pgvector:pg16**: a fresh vector database
+- **ollama/ollama**: the LLM server. It reuses the models already in `~/.ollama/models`, so nothing is downloaded again. Without them (e.g. in CI) the app pulls the models into the container on startup.
+
+The test uploads a small handbook, checks the vectors are stored with 768 dimensions, then asks a question and checks that the answer contains the right fact and cites the file. It also checks that an empty question or empty upload returns 400. It takes about 2 minutes because the LLM runs on the CPU inside the container.
+
 ## API
 
 ```bash
