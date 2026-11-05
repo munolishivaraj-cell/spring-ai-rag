@@ -1,9 +1,31 @@
+# Build output
 target/
-.idea/
-*.iml
-.vscode/
-.DS_Store
-*.log
 .mvn/apache-maven-*/
 .mvn/maven.zip
+
+# IDE
+.idea/
+*.iml
+*.ipr
+*.iws
+.vscode/
+.classpath
+.project
+.settings/
+.factorypath
+bin/
+out/
+
+# Secrets / local environment
+.env
+.env.*
+!.env.example
+
+# Logs and OS files
+*.log
+logs/
+.DS_Store
+Thumbs.db
+
+# Local scratch
 Claude outputs/
