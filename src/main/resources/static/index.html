@@ -1,0 +1,160 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Spring AI RAG</title>
+<style>
+  :root {
+    --bg: #f6f7f9; --card: #ffffff; --text: #1b1f24; --muted: #5b6470;
+    --line: #dde1e6; --accent: #2f6f4e; --accent-text: #ffffff; --err: #b3261e;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #15181c; --card: #1e2227; --text: #e7e9ec; --muted: #9aa3ad;
+      --line: #2e343b; --accent: #5fae86; --accent-text: #0e1a13; --err: #ff8a80;
+    }
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--text);
+         font: 15px/1.5 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
+  main { max-width: 820px; margin: 0 auto; padding: 24px 16px 48px; }
+  h1 { font-size: 22px; margin: 0 0 4px; }
+  .sub { color: var(--muted); margin: 0 0 20px; }
+  section { background: var(--card); border: 1px solid var(--line); border-radius: 10px;
+            padding: 16px; margin-bottom: 16px; }
+  h2 { font-size: 15px; margin: 0 0 10px; }
+  .row { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+  input[type=text] { flex: 1; min-width: 200px; padding: 10px 12px; border-radius: 8px;
+                     border: 1px solid var(--line); background: var(--bg); color: var(--text); font: inherit; }
+  input[type=file] { flex: 1; min-width: 200px; color: var(--muted); }
+  button { padding: 10px 16px; border: 0; border-radius: 8px; background: var(--accent);
+           color: var(--accent-text); font: inherit; font-weight: 600; cursor: pointer; }
+  button.secondary { background: transparent; color: var(--accent); border: 1px solid var(--accent); }
+  button:disabled { opacity: .5; cursor: wait; }
+  .status { color: var(--muted); font-size: 13px; margin-top: 8px; min-height: 1.5em; }
+  .status.err { color: var(--err); }
+  .answer { white-space: pre-wrap; margin: 12px 0 0; }
+  .sources { margin-top: 14px; border-top: 1px solid var(--line); padding-top: 10px; }
+  .src { font-size: 13px; color: var(--muted); margin-bottom: 8px; }
+  .src b { color: var(--text); }
+</style>
+</head>
+<body>
+<main>
+  <h1>Ask your documents</h1>
+  <p class="sub">RAG with Spring Boot, Spring AI, Ollama and pgvector</p>
+
+  <section>
+    <h2>1. Add documents</h2>
+    <div class="row">
+      <input type="file" id="file">
+      <button id="uploadBtn">Upload</button>
+      <button id="folderBtn" class="secondary">Ingest docs/ folder</button>
+    </div>
+    <div class="status" id="uploadStatus"></div>
+  </section>
+
+  <section>
+    <h2>2. Ask a question</h2>
+    <form class="row" id="askForm">
+      <input type="text" id="question" placeholder="e.g. How do I configure JWT in Spring Security?" autocomplete="off">
+      <button id="askBtn" type="submit">Ask</button>
+    </form>
+    <div class="status" id="askStatus"></div>
+    <div class="answer" id="answer"></div>
+    <div class="sources" id="sources" hidden></div>
+  </section>
+</main>
+
+<script>
+  const $ = (id) => document.getElementById(id);
+
+  function setStatus(el, text, isError = false) {
+    el.textContent = text;
+    el.classList.toggle('err', isError);
+  }
+
+  async function call(url, options) {
+    const res = await fetch(url, options);
+    const body = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(body.detail || body.title || ('HTTP ' + res.status));
+    return body;
+  }
+
+  function describeIngest(r) {
+    const files = Object.keys(r.chunksPerFile).length;
+    return `Stored ${r.totalChunks} chunks from ${files} file(s).`;
+  }
+
+  $('uploadBtn').onclick = async () => {
+    const file = $('file').files[0];
+    if (!file) return setStatus($('uploadStatus'), 'Choose a file first.', true);
+    const form = new FormData();
+    form.append('file', file);
+    $('uploadBtn').disabled = true;
+    setStatus($('uploadStatus'), 'Reading, chunking and embedding ' + file.name + ' ...');
+    try {
+      setStatus($('uploadStatus'), describeIngest(await call('/api/documents', { method: 'POST', body: form })));
+    } catch (e) {
+      setStatus($('uploadStatus'), e.message, true);
+    } finally {
+      $('uploadBtn').disabled = false;
+    }
+  };
+
+  $('folderBtn').onclick = async () => {
+    $('folderBtn').disabled = true;
+    setStatus($('uploadStatus'), 'Ingesting the docs/ folder ...');
+    try {
+      setStatus($('uploadStatus'), describeIngest(await call('/api/documents/ingest-folder', { method: 'POST' })));
+    } catch (e) {
+      setStatus($('uploadStatus'), e.message, true);
+    } finally {
+      $('folderBtn').disabled = false;
+    }
+  };
+
+  $('askForm').onsubmit = async (ev) => {
+    ev.preventDefault();
+    const question = $('question').value.trim();
+    if (!question) return;
+    $('askBtn').disabled = true;
+    $('answer').textContent = '';
+    $('sources').hidden = true;
+    setStatus($('askStatus'), 'Searching documents and generating an answer ...');
+    try {
+      const r = await call('/api/chat', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ question })
+      });
+      setStatus($('askStatus'), '');
+      $('answer').textContent = r.answer;
+      if (r.sources.length) {
+        $('sources').innerHTML = '';
+        const title = document.createElement('h2');
+        title.textContent = 'Sources';
+        $('sources').appendChild(title);
+        r.sources.forEach(s => {
+          const div = document.createElement('div');
+          div.className = 'src';
+          const head = document.createElement('b');
+          const score = s.score != null ? ` · similarity ${s.score.toFixed(2)}` : '';
+          head.textContent = `[${s.index}] ${s.source}${score}`;
+          div.appendChild(head);
+          div.appendChild(document.createElement('br'));
+          div.appendChild(document.createTextNode(s.excerpt));
+          $('sources').appendChild(div);
+        });
+        $('sources').hidden = false;
+      }
+    } catch (e) {
+      setStatus($('askStatus'), e.message, true);
+    } finally {
+      $('askBtn').disabled = false;
+    }
+  };
+</script>
+</body>
+</html>

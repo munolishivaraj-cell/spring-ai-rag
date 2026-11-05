@@ -1,0 +1,46 @@
+spring:
+  application:
+    name: spring-ai-rag
+
+  # PostgreSQL + pgvector (started with: docker compose up -d)
+  datasource:
+    url: jdbc:postgresql://localhost:5432/ragdb
+    username: postgres
+    password: postgres
+
+  servlet:
+    multipart:
+      max-file-size: 20MB
+      max-request-size: 20MB
+
+  ai:
+    ollama:
+      base-url: http://localhost:11434
+      init:
+        pull-model-strategy: when_missing   # downloads the models below on first start if missing
+      chat:
+        options:
+          model: llama3.2                   # chat model (about 2 GB); try qwen2.5:7b on a bigger GPU
+          temperature: 0.2                  # low = factual, sticks to the documents
+      embedding:
+        options:
+          model: nomic-embed-text           # embedding model, produces 768-dimension vectors
+
+    vectorstore:
+      pgvector:
+        initialize-schema: true             # creates the vector extension and table on first start
+        index-type: HNSW
+        distance-type: COSINE_DISTANCE
+        dimensions: 768                     # must match the embedding model
+
+# Our own RAG settings (see RagProperties.java)
+rag:
+  top-k: 4                      # how many chunks to give the LLM
+  similarity-threshold: 0.4     # ignore chunks less similar than this (0..1)
+  docs-folder: docs             # folder read by POST /api/documents/ingest-folder
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info

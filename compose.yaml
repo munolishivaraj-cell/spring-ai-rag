@@ -1,0 +1,18 @@
+# PostgreSQL with the pgvector extension - the vector database for RAG.
+# Start:  docker compose up -d
+# Stop:   docker compose down        (add -v to also delete the stored vectors)
+services:
+  pgvector:
+    image: pgvector/pgvector:pg16
+    container_name: pgvector
+    environment:
+      POSTGRES_DB: ragdb
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+
+volumes:
+  pgdata:

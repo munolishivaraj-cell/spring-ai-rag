@@ -1,0 +1,9 @@
+target/
+.idea/
+*.iml
+.vscode/
+.DS_Store
+*.log
+.mvn/apache-maven-*/
+.mvn/maven.zip
+Claude outputs/
